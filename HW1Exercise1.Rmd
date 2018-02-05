@@ -1,0 +1,66 @@
+---
+title: "H1-Exercise 1"
+author: "Constanza F. Schibber"
+date: "1/22/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Excercise 1 (11.4)
+
+ The folder cd4 has CD4 percentages for a set of young children with HIV who were measured several times over a period of two years. The dataset also includes the ages of the children at each measurement.
+
+```{r data}
+hiv.data<-read.csv("http://www.stat.columbia.edu/~gelman/arm/examples/cd4/allvar.csv")
+colnames(hiv.data)
+hiv.data <- subset(hiv.data, (CD4PCT>0) & (baseage>0))
+hiv.data$sqrt.CD4 <- sqrt(hiv.data$CD4PCT) 
+hiv.data$time <- hiv.data$visage - hiv.data$baseage # create time
+
+#create id variable to represent unique new id for each child
+hiv.data$id<-NA
+J<-length(hiv.data$newpid)
+uniq.pid<-unique(hiv.data$newpid)
+for (i in 1:J){
+hiv.data$id[hiv.data$newpid==uniq.pid[i]] <- i
+}
+
+summary(hiv.data$id)
+```
+
+(a) Graph the outcome (the CD4 percentage, on the square root scale) for each child as a function of time. Select 4 children because there are many of them.
+
+```{r 1.a}
+
+```
+
+(b) Each child’s data has a time course that can be summarized by a linear fit. Estimate these lines and plot them for all the children. (Do it for the 4 children you selected above)
+
+```{r 1.b unpooled model}
+
+```
+
+# Exercise 2 (12.2)
+
+(a) Write a model predicting CD4 percentage as a function of time with varying intercepts across children. Fit using lmer() and interpret the coefficient for time.
+
+
+```{r M1}
+
+```
+
+(b) Extend the model in (a) to include child-level predictors (that is, group-level predictors) for treatment and age at baseline. Fit using lmer() and interpret the coefficients on time, treatment, and age at baseline.
+
+```{r group level predictor}
+
+```
+
+(c) Investigate the change in partial pooling from (a) to (b) both graphically and numerically.
+
+```{r}
+
+```
+
