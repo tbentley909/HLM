@@ -1,0 +1,172 @@
+---
+title: "H1-Exercise 1"
+author: "Thomas Bentley"
+date: "2/05/2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load in the packages I will need for the homework 
+```{r, include=TRUE}
+library(arm) 
+library(car)
+library(foreign)
+library(ggplot2)
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+library(dplyr)
+library(tibble)
+```
+
+##### Excercise 1 (11.4)
+
+ The folder cd4 has CD4 percentages for a set of young children with HIV who were measured several times over a period of two years. The dataset also includes the ages of the children at each measurement.
+
+```{r data}
+hiv.data<-read.csv("http://www.stat.columbia.edu/~gelman/arm/examples/cd4/allvar.csv")
+colnames(hiv.data)
+hiv.data <- subset(hiv.data, (CD4PCT>0) & (baseage>0))
+hiv.data$sqrt.CD4 <- sqrt(hiv.data$CD4PCT) 
+hiv.data$time <- hiv.data$visage - hiv.data$baseage # create time
+
+#create id variable to represent unique new id for each child
+hiv.data$id<-NA
+J<-length(hiv.data$newpid)
+uniq.pid<-unique(hiv.data$newpid)
+for (i in 1:J){
+hiv.data$id[hiv.data$newpid==uniq.pid[i]] <- i
+}
+
+summary(hiv.data$id)
+```
+
+##### (a) and (b) Graph the outcome (the CD4 percentage, on the square root scale) for each child as a function of time. Only select 8 children because there are many of them. 
+
+  Each child’s data has a time course that can be summarized by a linear fit. Estimate these lines and add them to the plot. (Do it for the 8 children you selected above).
+Hint: Unpooled model with data points
+
+```{r 1.a.b}
+set.seed(8)
+eight <- hiv.data[hiv.data$id %in% sample(unique(hiv.data$id),8),]
+unique(eight$id)
+
+reg1 <- lm(sqrt.CD4 ~ time, data = subset(eight, id ==52))
+reg2 <- lm(sqrt.CD4 ~ time, data = subset(eight, id ==71))
+reg3 <- lm(sqrt.CD4 ~ time, data = subset(eight, id ==80))
+reg4 <- lm(sqrt.CD4 ~ time, data = subset(eight, id ==117))
+reg5 <- lm(sqrt.CD4 ~ time, data = subset(eight, id ==162))
+reg6 <- lm(sqrt.CD4 ~ time, data = subset(eight, id ==177))
+reg7 <- lm(sqrt.CD4 ~ time, data = subset(eight, id ==199))
+reg8 <- lm(sqrt.CD4 ~ time, data = subset(eight, id ==227))
+
+unpooled.plot <- ggplot(eight, aes(x=time, y=sqrt.CD4, group=id) ) + 
+        geom_point(aes(color = factor(eight$id))) +
+        geom_smooth(aes(color = factor(eight$id)), method = "lm", se = FALSE) + 
+        scale_color_discrete(name="Student ID") + 
+        theme_bw()
+unpooled.plot
+```
+
+##### Interpretation
+  The unpooled model yields varying intercepts and slopes for the respecitve linear models across each subset of children. This would suggest we should account for random effects in our linear models to characterize the variation between children due to their individual differences. 
+
+##### Exercise 2 (12.2)
+
+(a) Write a model predicting CD4 percentage as a function of time with varying intercepts across children. Fit using lmer() and interpret the coefficient for time. 
+
+```{r M1}
+M1 <- lmer( CD4PCT ~ time + (  1 | id), data = hiv.data)
+summary(M1)
+
+# coef (M1)
+# fixef (M1)
+# ranef (M1)
+
+# Examine the distribution of group intercepts 
+a.hat.M1 <- fixef(M1)[1] + ranef(M1)$id[,1] # varying intercept by student id
+hist(a.hat.M1) # plot the distribution of intercepts
+abline(v = 25.068, col = "red") # add mean - alpha 
+
+# Quick plot of the every student with varying intercepts but same slope 
+# sjp.lmer(M1, vars = "time", type = "ri.slope")
+```
+
+##### Interpretation
+  Allowing the intercepts to vary across student's ids, for a one unit change in time, on average, there is a decrease of roughly 3% (2.98%) of CD4 for each child. Most of the variation in CD4 appears to be between children rather than within children: $\sigma^2_{\alpha}=128.10$ while $\sigma^2_{y}=53.46$. A lot of the variation here is attributable to child identity. Different children have very different base CD4 levels. But, within each child, this model says that you can expect CD4 to decrease by 1.6 every year. 
+
+(b) Extend the model in (a) to include child-level predictors (that is, group-level predictors) for treatment and age at baseline. Fit using lmer() and interpret the coefficients on time, treatment, and age at baseline. 
+
+```{r group level predictors}
+M2 <- lmer(CD4PCT ~ time + treatmnt + baseage + (1 | id), data = hiv.data)
+summary(M2)
+
+# Comparing the addition of group-level predictors with likelihood ratio test using an anova
+anova(M1, M2) # Appears the addition of the child-level predictors (group-level) improves the model although barely
+```
+
+##### Interpretation
+The time coefficient remains relatively the same (-2.953) and only marginally decreases in its respective coefficient value. Children who were treated compared to those who were not treated have on average 1.18% more CD4. Children that are older at the base age have on average roughly 1% (.95%) less CD4. $$\sigma^2_{\alpha}$$ decreases from 128.10 to 123.92, which suggests some of the group level predictors are accounting for the varation of CD4. $$\sigma^2_{y}$$ (individal level variation) remains relatively the same. 
+
+(c) Investigate the change in partial pooling from (a) to (b) both graphically and numerically. Hint: Compare the within and between variances. To the plot you did in Exercise 1, add the linear treads from the multilevel model for the 8 children.
+
+```{r}
+# (c)  Investigate the change in partial pooling from (a)
+# to (b) both graphically and numerically.
+# Note: the following code is adapted from # https://tjmahr.github.io/plotting-partial-pooling-in-mixed-effects-models/
+xlab <- "Time"
+ylab <- "CD4PCT"
+
+# Partial pooling of model 1 - varying random intercept with no group-level predictors
+df_partial_pooling_M1 <- coef(M1)[["id"]] %>% 
+  as_tibble() %>% 
+  rownames_to_column("id") %>% 
+  rename(Intercept = `(Intercept)`, Slope_time = time) %>% 
+  add_column(Model = "Partial pooling M1")
+
+# Subset the 8 children
+df_partial_pooling_M1 <- filter(df_partial_pooling_M1, id == "52" | id == "71" | id == "80" | id == "117" | id == "162" | id == "177" | id == "199" | id == "227")
+df_partial_pooling_M1$id <- as.integer(df_partial_pooling_M1$id) # have to convert structure - currently in character
+
+# Partial pooling of model 2 - varying random intercept with group-level predictors 
+df_partial_pooling_M2 <- coef(M2)[["id"]] %>% 
+  as_tibble() %>% 
+  rownames_to_column("id") %>% 
+  rename(Intercept = `(Intercept)`, Slope_time = time) %>% 
+  add_column(Model = "Partial pooling M2")
+
+# Subset the 8 children
+df_partial_pooling_M2 <- filter(df_partial_pooling_M2, id == "52" | id == "71" | id == "80" | id == "117" | id == "162" | id == "177" | id == "199" | id == "227")
+df_partial_pooling_M2$id <- as.integer(df_partial_pooling_M2$id) # have to convert structure - currently in character
+
+# Merge in the values from the models (intercept and slopes) with raw data
+df_models <- bind_rows(df_partial_pooling_M1, df_partial_pooling_M2) # Combining the intercepts/slopes
+df_models <- left_join(eight, df_models, by = "id")
+```
+
+```{r}
+# Comparing the partial pooling models (Model 1 and Model 2) with raw data
+model_comparison <- ggplot(df_models) + 
+  aes(x = time, y = CD4PCT) + 
+  # Set the color mapping in this layer so the points don't get a color
+  geom_abline(aes(intercept = Intercept, slope = Slope_time, color = Model), size = .75) + 
+  geom_point() +
+  facet_wrap("id") +
+  labs(x = xlab, y = ylab) + 
+  # Fix the color palette 
+  scale_color_brewer(palette = "Dark2") + 
+  theme(legend.position = "top") +
+  theme_bw()
+
+model_comparison
+```
+
+##### Interpretation 
+It looks like the random effects in Model 1 were incorporating some information from treatment and base age in the error term structure of the partial pooling model. Model 2, however, appears to account for some of the random structure in the error term when acounting for the group-level predictors in the fixed effects. Nevertheless, the random effects across the two models are fairly consistent with child, however, child id 71 and 80 demonstrate the greatest difference in variance between models. 
+
+Numerically, the pooling does not seem very different. For instsance, $\sigma^2_{\alpha}$ decreases from 128.10 to 123.92, which suggests some of the group level predictors are accounting for the varation of CD4 (Model 1's variance in the random effects is 128.10 and Model 2's is 123.92). While this value decreases when accounting for the group-level predictors in the fixed effects. it does not seem numerically to be significantly different with sub-sample of eight children. But when comparing the two models using the full sample with a likelihood ratio test using an anova results in a $\chi^2=8.92$, and p-value=0.01. Thus, we can conclude that with a confidence of $\alpha=.01$ that including the child-level variables (group-level) improves the model, but only marginally, 
