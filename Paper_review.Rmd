@@ -1,0 +1,46 @@
+---
+title: "Summary of Peffley et al. 2015. “The Impact of Persistent Terrorism on Political Tolerance:Israel, 1980 to 2011”, APSR 109(4): 1-16"
+author: "Thomas Bentley"
+date: "2/19/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##1 Theory and Hypotheses 
+
+Broadly, this paper examines the effects of terrorism on political tolerance of Israelis. The theory rests on the notion that political tolerance is an essential component of a democracy. The willingness to put up with other groups or ideas that are conflictual is an integral aspect to open competition for power - a hallmark of a liberal democracy, as noted by the authors. In the context of terrorist attacks, such political tolerance maybe extremely difficult to sustain in the face of a grave threat. The authors suggest the political tolerance should vary across different types of individuals - especially across the political identification spectrum. That is individuals who political identify with the Right will react more strongly to security threats by opposing freedoms for groups they oppose (particularly outgroups). 
+
+In the context of Israel, a state that has experienced a considerable amount of terrorism, political tolerance among Right leaning Israeli Jews should will lower as the number of terrorist attacks increase. The authors also suggest that an incrase in terrorist attacks will lower political tolerance among Israeli Jews, independently of macro-level factors and individual-level predictors (multilevel model). The authors also expect that the impact of terrorist attacks on political tolerance will strengthen over time, particularly among Left and Center Israeli Jews. 
+
+
+##2 Key Measures  
+
+The study leverages 18 d]surveys conducted in Israel between 1980 to 2011. Estimated models include 18-groups (surveys) and 14,211 individuals. 
+
+* Dependent variable: political tolerance - defined and measured using the least-liked group approach. Measured as an additive index formed by summing respondents' level of agreement with 5-point Likert statements, from low tolerance (0) to high tolerance (8)
+* Independent variables: 
+    + Political identity: 5-point Left-Right identification scale Right(0)-Left(4)
+* Control Measures: Religiosity, Education, Age, Female, Income 
+* Macro-level measures: Terrrorism (GTD) - total number of attacks prior to the start of a survey 
+    + Different lags prior to the start: 3, 6, and 12 months
+    + Continuous democracy - democracy longetivity (months as a democracy according to Polity IV index)
+    + Macro-economic controls: Economic growth and inflation rate
+
+##3 Model 
+
+A series of multilevel models given the multilevel structure of the study: individuals are nested within surveys conducted at different points in time. Goal of the study is assess the impact of macro-level variables (terrorist attacks) and individual-level attributes (political identity). 
+
+This allows the researchers to estimate unbiased standard errors as the multilevel model accounts for the two-levels jointly and estimates separate variance structures.
+
+$Tolerance_ij$ is our level-1 dependent variable for an individual *i*(=1, . . ., $N_j$) nested in our level-2 unit,
+time *j*(=1, . . ., *J*). (See Section 4, supplementary document)
+
+##4 Why this model?
+Goal of the study is to assess the impact of macro-level variables (terrorist attacks) and individual-level attributes (political identity) on individual-level political tolerance. By employing a multilevel model, the authors are able to allow both the intercepts and slopes to vary. This is important given the nested nature of the data and the temporal heterogeneity across the pooled survey periods - see Figure 1 in the paper. If the authors aggregated the data to a macro-level, the authors who risk severe ecological inference, and conversely if the authors disaggregated macro-level data to the individual level the authors would risk making a Type II error (See Section 4, supplementary document).
+
+##5 Results 
+
+The authors find that persistent terrorism erodes individual political tolerance, particularly across Right-leaning Israelis, but remains relatively resilient among the aggregrate - measured in contnuous democracy - in the aftermath of violent periods (i.e. the second Intifada). The results do not support the hypothesis that political tolerance will diminish among Israeli Jews who politically identify Left/center. 

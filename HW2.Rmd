@@ -1,0 +1,335 @@
+---
+title: "Assignment 2 (DUE 3/12)"
+author: "Thomas Bentley"
+date: "03/12/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Varying Intercept and Varying Slope Model
+
+In Lab 5 we worked on the model presented by Margit Tavits and Joshua Potter. You can find their paper on Piazza under "Assignments".
+
+The authors presented a Multilevel Linear Model with Varying Intercepts for Political Party and Country. They indicate that the unit of analysis is at the election-political party-country level, with observations nested by political party, which are then nested by country. To assess the following hypothesis,
+
+**During periods of heightened inequality, leftist parties are more likely to emphasize the economic interest-based dimension, whereas this effect will not hold for righist parties (page 746).**
+
+the authors fit a hierarchical linear model. Their outcome variable is the *economic emphasis* of a party's manifesto in a given election, which takes values from 0 to 83.33. The measure of a party's *ideology* is a dichotomous indicator of whether a political party is on the right or not (`right4`). As a measure of *inequality* the authors rely on the gross national level gini coefficient for each election (`gini_gross`). 
+
+Specifically, the authors fit the following model, 
+
+$$ emphasis_{epc} = \alpha_{p[e]} + \beta_0 + \beta_1 \text{inequality} + \beta_2 \text{ideology} + \beta_3 \text{inequality} \times \text{ideology}+ \mathbf{X}_{e}\beta+ \epsilon_{e}$$
+
+$$ \alpha_{p} \sim \mathcal{N}(\alpha_{c[p]}, \sigma^2_{party}) $$
+
+$$ \alpha_{c} \sim \mathcal{N}(0, \sigma^2_{country}) $$
+
+which I rewrote using the notation used Gelman and Hill. The subscript *epc* refers to election *e*, party *p*, and country *c*. The term $\mathbf{X}_{epc}\beta$ is a matrix of controls. Notice that an interaction between *ideology* and *inequality* is required based on their theory: the effect of ideology on a party's strategy is conditional on the level of inequality. 
+
+Keeping the same groups defined by the authors (party and country), however, the model they should have fit is the following, 
+
+$$ emphasis_{mepc} = \alpha_{p} + \beta_0 + \beta_{p} \text{inequality} + \mathbf{X}\beta + \epsilon_{i}$$
+
+$$ \alpha_{pc} = \alpha_{c} + \gamma_2 \text{ideology} + \gamma_3 \text{niche} + \eta_{\alpha_{party}} $$
+
+$$ \beta_{pc}= \gamma_4 + \gamma_5 \text{ideology} + \eta_{\beta_{party}} $$
+
+$$\eta_{pc} \sim \mathcal{MVN}(0, \Sigma_{party})$$
+
+$$ \alpha_{c} \sim \mathcal{N}(0, \sigma^2_{country}) $$
+
+**1.1** List and explain the differences between the model the authors fit and the second model. What is a key problem with the authors' model that is corrected by the second model? Why does it have to be corrected? 
+The authors' model is a non-nested mixed model that accounts for varying baseline values of party and country, seperately. The authors does this by including varying-intercepts for both levels. In contrast to the rewritten model, the authors' modeling approach does not assume hierachical nesting. However, in the new model proposed, we account for this hierarchical structure and recognize that parties from the same country are more similar than parties from different countries. The model also recognizes that individuals observed in the same party in the same country have more in common than individuals observed in the same country but different party. 
+
+Hint: To understand the difference in the subscript of the outcome variable, see 1.6 below. This is not the key problem I am referring in the question. 
+
+**1.2** Fit the second model in `R`. Include all the control variables we included in Lab 5 (`newparty`, `niche`, `pervote`, `gdpg`, `enpv`, `newdem`)
+
+You will have to centered inequality at its mean for model convergence (see page 93, Gelman and Hill).
+
+```{r Read Data, include=FALSE}
+library(foreign)
+library(arm)
+library(lme4)
+set.seed(123)
+data.0 <- read.dta("https://www.dropbox.com/s/w58562dx8xgqke9/tavits_potter_data.dta?dl=1", 
+               convert.factors = FALSE)
+data.0 <- as.data.frame(data.0)
+colnames(data.0)
+dim(data.0)
+
+# drop cases following authors' code
+data.1 <- subset(data.0, exclude != 1)
+dim(data.1)
+# if part1, part9 to part13 is 1, drop
+data.1$part.var <- rowSums(data.1[, c("part1", 
+                        "part9", 
+                        "part10", 
+                        "part11", 
+                        "part12", 
+                        "part13")])
+summary(as.factor(data.1$part.var))
+data.1 <- subset(data.1,  part.var != 1)
+dim(data.1)
+# drop non-democracies or outside Europe
+countries.to.remove<-c("Azerbaijan", 
+                              "Belarus",
+                              "German Democratic Republic",
+                              "Northern Ireland", 
+                              "Sri Lanka",
+                              "Mexico")
+data <- data.1[!(data.1$countryname %in% countries.to.remove),]
+dim(data)
+data <- as.data.frame(data)
+
+# creating my own party.id 
+party.id <- NA
+uniq.party <- unique(data$party)
+P <- length(uniq.party)
+for(i in 1:P){
+  for(j in 1:nrow(data)){
+    ifelse(data$party[j]==uniq.party[i],
+            party.id[j]<-i, 
+            NA)
+    }
+}
+summary(party.id)
+data$party.id <- party.id
+
+# row.id
+data$row.id <- 1:nrow(data)
+```
+
+
+```{r Model 1}
+data$gini_gross_c <- data$gini_gross - mean(data$gini_gross, na.rm = TRUE)
+model <- lmer(econ_sum ~ right4 # party level variable
+            # election-country level
+             + gini_gross_c 
+            # cross-level interaction 
+             + right4:gini_gross_c
+            # individual level
+             + newparty 
+            # party level variable
+             + niche 
+            # individual level
+             + pervote 
+            # election-country level
+             + gdpg 
+             + enpv 
+            # individual level
+             + newdem
+             + (1 + right4:gini_gross_c | countryname/party.id),
+             data)
+display(model)
+
+```
+
+**1.3** Berry, Golder, and Milton indicate that "all interactions are symmetric: when the effect of X on Y is conditional on the value of Z, the effect of Z must be conditional on the value of X." Their recommendation is to make additional predictions about the theorized relationship and to assess them.  
+
+Create the following figures and provide a thorough description and explanation for all of them.  
+
+*General comments:*
+In (a) you will be focusing in the difference between left-wing and right-wing parties as inequality varies. In (b) you will be focusing on the difference within left-wing parties and within right-wing parties, for a change in inequality.
+
+You should rely on the code I provided in Lab 5. You will have to change the names of the objects so that I know you worked through the code to understand it. You are welcome to make any additional changes you see fit. 
+
+*Note*: Caleb and I worked on developing the code for the figures together and helped Sam with Figure 1.3c
+
+```{r Figures}
+
+
+# Creating simulation of coefficients
+n.draws <- 1000
+sim.coef <- coef(sim(model, n.draws))
+colnames(as.data.frame(sim.coef))
+
+sim.coef <- as.data.frame(sim.coef)
+colnames(sim.coef)
+
+```
+
+*(a) Predictions:* Create a figure showing how the economic emphasis of a manifesto changes for leftist and righist parties as economic inequality increases. Include a `legend()` and histogram for the distribution of the variable *inequality*. 
+
+The effects vary between left and right parties. As inequality increases, Left parties tend to place a greater magnitude of emohasis on economic interests compared to right parties. However, the relationship between the two parties at low levels of economic inequality, exhibits similar effects. 
+
+```{r Figures}
+## Figure 1 ##
+
+## x intercept + right4 + gini_gross_c  + right4:gini_gross_c 
+# create gini variable
+seq.gini <- seq(from = min(na.omit(data$gini_gross_c )), to = max(na.omit(data$gini_gross_c )), 
+    by = 0.1)
+# right wing - setting the profile of right wing 
+x.pred.right <- cbind(1, 1, seq.gini, seq.gini)
+x.pred.right <- as.matrix(x.pred.right)
+dim(x.pred.right)
+
+# left wing - setting the profile of left wing 
+x.pred.left <- cbind(1, 0, seq.gini, seq.gini * 0)
+x.pred.left <- as.matrix(x.pred.left)
+dim(x.pred.left)
+
+# beta - extracting beta values of interest from the model 
+b.right <- sim.coef[, c("fixef..Intercept.", "fixef.right4", 
+    "fixef.gini_gross_c", "fixef.right4.gini_gross_c")]
+dim(b.right)
+
+# pred - calculating the predicted values by matrix multiplying profiles and beta values
+y.pred.right <- x.pred.right %*% t(b.right)
+y.pred.left <- x.pred.left %*% t(b.right)
+
+# CI, median - extracting information we need 
+ypred.ci.right <- apply(y.pred.right, 1, quantile, probs = c(0.025, 
+    0.5, 0.975))
+ypred.ci.left <- apply(y.pred.left, 1, quantile, probs = c(0.025, 
+    0.5, 0.975))
+
+# Figure 1 
+hist(na.omit(data$gini_gross_c), main = NA, axes = FALSE, col = "grey80", 
+    border = NA, ylab = "", xlab = "")
+par(new = TRUE)
+plot(x=0, y=0, xlim = range(seq.gini), ylim = c(15, 35), xlab = "Gini Coefficient", 
+    ylab = "Economic Emphasis of a Party Manifesto")
+lines(seq.gini, ypred.ci.right[2, ], lwd = 3, col = "blue")
+lines(seq.gini, ypred.ci.right[1, ], lty = 3, lwd = 2, col = "blue")
+lines(seq.gini, ypred.ci.right[3, ], lty = 3, lwd = 2, col = "blue")
+lines(seq.gini, ypred.ci.left[2, ], lwd = 3)
+lines(seq.gini, ypred.ci.left[1, ], lty = 3, lwd = 2)
+lines(seq.gini, ypred.ci.left[3, ], lty = 3, lwd = 2)
+legend(5,20, legend= c("Left", "Right"), lty=c(1,1),lwd=c(1,1),col=c("black","blue"), cex=0.8)
+```
+
+*(b) The Effect of Ideology Conditioned on Inequality:* In a second figure, show the marginal effect of *ideology* on *Y*. 
+
+As economic inequality increases the marginal effect on economic interests tends to decrease for rightist parties. At low-levels of economic inequality, this marginal effect is insignificant. 
+
+```{r Figures}
+## Figure 2 ##
+# x values - setting the profile 
+x.pred <- cbind(1, seq.gini)
+x.pred <- as.matrix(x.pred)
+dim(x.pred)
+
+# beta - beta values of from object of interest 
+b.pred <- cbind(sim.coef["fixef.right4"], sim.coef["fixef.right4.gini_gross_c"])
+b.pred <- as.matrix(b.pred)
+dim(b.pred)
+
+# derivate w/ respect to x=right
+ME <- x.pred %*% t(b.pred)
+dim(ME)  # one column for each value of gini
+
+# CI, median - pulling information we need 
+me.ci <- apply(ME, 1, quantile, probs = c(0.025, 0.5, 0.975))
+
+## Figure 2 
+hist(na.omit(data$gini_gross), main = NA, axes = FALSE, col = "grey80", 
+    border = NA, ylab = "", xlab = "")
+par(new = TRUE)
+plot(0, type="n", xlim = range(seq.gini), ylim = c(-10, 2), xlab = "Gini Coefficient", 
+    ylab = "Marginal Effect", main = "Economic Emphasis of a Party Manifesto")
+lines(seq.gini, me.ci[2, ], lwd = 3)
+lines(seq.gini, me.ci[1, ], lty = 3, lwd = 2)
+lines(seq.gini, me.ci[3, ], lty = 3, lwd = 2)
+abline(h = 0, lty = 3)
+```
+
+*(c) The Effect of Inequality Conditioned on Ideology:* In a third figure you are interested in illustrating the effect of *inequality* conditional on *ideology*. *Ideology* is a dichotomous variable.
+
+It appears leftist parties have a higher marginal effect on economic interests conditioned on economic inequality than rightist parties. 
+
+```{r Figures}
+## Figure 3 ##
+# derivate w/ respect to x=gini x values Right
+x.pred.2 <- matrix(c(1,1), ncol = 2, nrow = 1)
+
+# beta
+b.pred.2 <- cbind(sim.coef["fixef.gini_gross_c"], sim.coef["fixef.right4.gini_gross_c"])
+b.pred.2 <- as.matrix(b.pred.2)
+dim(b.pred.2)
+
+# me
+ME.2 <- x.pred.2 %*% t(b.pred.2)
+dim(ME.2)  # one column for each value of gini
+
+# CI, median
+me.ci.2 <- apply(ME.2, 1, quantile, probs = c(0.025, 0.5, 0.975))
+me.ci.2
+
+# Left
+x.pred.3 <- matrix(c(1,0), ncol = 2, nrow = 1)
+
+# me
+ME.3 <- x.pred.3 %*% t(b.pred.2)
+dim(ME.3)  # one column for each value of gini
+
+
+# CI, median
+me.ci.3 <- apply(ME.3, 1, quantile, probs = c(0.025, 0.5, 0.975))
+me.ci.3
+
+
+## Figure 3
+plot(0, type = "n", xlim = c(1,2), ylim = c(-.1,.38), xlab = "Ideology (Left and Right)", xaxt='n',
+ylab = "Marginal Effect", main = "The Effect of Inequality Conditioned on Ideology")
+segments(x0 = 1.2, y0 = me.ci.3[1], x1 = 1.2, y1 = me.ci.3[3], lwd = 1, col = "red")
+segments(x0 = 1.8, y0 = me.ci.2[1], x1 = 1.8, y1 = me.ci.2[3], lwd = 1, col = "blue")
+points(y = me.ci.3[2], x = 1.2, pch = 19)
+points(y = me.ci.2[2], x = 1.8, type = "p", pch = 19)
+legend(1.6, .35, legend=c("Left", "Right"),
+col=c("red", "blue"), lty=1, cex=0.8)
+abline(h = 0, lty = 3)
+
+```
+
+**1.4** Looking at the empirical section of Tavits and Potter (pages 750-752), what other predictions could have been made about their theory? What are the differences between your analysis in 1.3 and their analysis? 
+
+Several differences are immediately noted in the difference between baseline intercept values suggest with my model taking a value of 26.85, nearly 7-points higher than Tavits and Potter and magnitudes in coefficient values across the various covariates. The main independent variable inequality is the same value at a $\beta$ =.17. My rightist variable, however, differs dramatically with a $\beta$=-2.88, where Tavits and Potter's value is $\beta$=3.55. 
+
+It appears the my nested levels - party and country - accounts for a similar degree (slightly better) of variation as the non-nested mixed model with a residual value of 8.58 in my model compared to 8.67 in Tavits and Potter.  
+
+
+**1.5** The multilevel model could have included a hierarchy for *election*. After all, the authors claim that the first level in their model is election-party-country, but it is actually manifesto-election-party-country. In other words, the unit of analysis is manifesto-election-party-country. Each observation corresponds to a political manifesto written by a party for a specify election in a country. 
+
+1.5.1 Should you be concerned about the lack of an election hierarchy in the model? Why? Include the relevant (or relevant) references. 
+
+I am not sure I exactly follow the logic from the data. However, without being fluent in the parties literature, I am concerned about the insufficient discussion regarding election hierarchy. Unless election is conceptualized as a given year a particular election occurs,  I would argue it is important to account for election processes that differ across various political systems. Such systematic election processes differences could influence the subsequent creation of parties and their respective party characteristics rooted in their manifestos. 
+
+It seems it might be more appropraite to create a unit of analysis that is election_year-party-election-country. Where the election level accounts for hetergeneity across elections, as many country political processes vary in the nature in which elections are held and how such processes are executed.
+
+1.5.2 Are *political party* and *election* nested or non-nested hierarchies? Why?
+
+In this model political party and election are nested, where election is considered at the individual level nested under political party and country.  
+
+1.5.3 Of all the variables included in the model, which ones would you include in the election level of the model?
+
+I would capture specific polity variables such as new democracy and competitiveness of the specific election. 
+
+
+# 2. Hypothesis Testing
+
+In answering the following, draw information from as many of the readings as possible (provide references). This is an opportunity to develop concise arguments in case someone asks your opinion about these matters.
+
+3.1 What is the Null Hypothesis Significance Test (NHST)? Explain two problems of the Null Hypothesis Significance Test. 
+NHST encompasses a procedure where two hypotheses are posited: a null hypothesis and research hypothesis. THe authors employ a probability model which suggests the authors belief about some underlying aspect of the data, which is operationalized as a parameter (or coefficient value) in a model. The null hypothesis in this case sets the value of this parameter to zero, and the research hypothesis suggests it does not equal zero. To determine whether or not such value equals (or does not), the researcher usually uses a t-statistic to determine the probability that the parameter does not equal the null at given threshold, identified with a predetermined $\alpha$ value.  
+
+Gill (1999, 2015) provides several problems associated with NHST. Some serious problems include confusion over the order of conditional probability, scholars chasing significance size but ignoring effect size, and adherence to arbitrary significance thresholds. 
+
+3.2 What is a p-value? Explain three problems with claiming that a p-value provides support for your theory. (e.g.You present a model, a table of the results, and p-values/stars. Then, you interpret p-values and you are done.)  
+
+A p-value is a statistic indicating the probability that we can reject the null hypothesis. 
+A problem with this is that p-values are arbitrary thresholds. However, there are many p-values we can use to reject the null hypothesis - so which one do we use? 
+Using a p-value makes assumptions about the future data and can be unreliable given a researcher's data, based on repeated trials. 
+
+
+# 3. Bayesian Statistics
+
+There are a number of differences between Bayesian and classical statistics. Select two fundamental differences between the two schools of thought and write a paragraph explaining each one. 
+
+A difference is emphasis of asymptotics. Frequentists place emphasis on this byway of solely normal distribution and that through repeated trials the data will form close to normal curve. However, bayesians do not place such emphasis and instead apply priors (or subjectivity). Meaning, that the bayesian approach leverages some prior knowledge based on best available information about the variables of interest, the parameteres in our model.  
+
+Another difference is reporting results. Frequentists rely on confidence intervals to report their respective findings. However, bayesians report credible intervals based on a posterior distribution, which is the probability distribution conditional on the data from the study. 
